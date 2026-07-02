@@ -206,20 +206,33 @@ cat "$RUN_DIR/command.txt"
 
 # `&` alone is not enough in Codex/tool environments.
 # Use nohup + setsid so the process is not tied to the launching shell/session.
-# macOS has no setsid binary, so fall back to plain nohup there.
+# macOS has no setsid binary; plain nohup is NOT enough there because the
+# process stays in the caller's process group and gets killed when the
+# launching tool command finishes. Start a new session via python3 instead.
 if command -v setsid >/dev/null 2>&1; then
   nohup setsid "${cmd[@]}" \
     > "$RUN_DIR/sentinel.log" \
     2> "$RUN_DIR/sentinel.err.log" \
     < /dev/null &
+  PID="$!"
 else
-  nohup "${cmd[@]}" \
-    > "$RUN_DIR/sentinel.log" \
-    2> "$RUN_DIR/sentinel.err.log" \
-    < /dev/null &
+  PID="$(python3 - "$RUN_DIR/sentinel.log" "$RUN_DIR/sentinel.err.log" "${cmd[@]}" <<'PYLAUNCH'
+import os
+import subprocess
+import sys
+
+log_path, err_path = sys.argv[1], sys.argv[2]
+cmd = sys.argv[3:]
+with open(log_path, "ab") as log, open(err_path, "ab") as err, \
+        open(os.devnull, "rb") as devnull:
+    proc = subprocess.Popen(
+        cmd, stdout=log, stderr=err, stdin=devnull, start_new_session=True
+    )
+print(proc.pid)
+PYLAUNCH
+)"
 fi
 
-PID="$!"
 echo "$PID" > "$PID_FILE"
 echo "started sentinel pid=$PID"
 
