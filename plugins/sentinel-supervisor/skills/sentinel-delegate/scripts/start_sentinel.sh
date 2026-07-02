@@ -85,8 +85,15 @@ is_existing_sentinel_run() {
   local proc_cwd=""
   local proc_cmd=""
 
-  proc_cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
-  proc_cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+  if [[ -r "/proc/$pid/cmdline" ]]; then
+    # Linux: read process info from /proc.
+    proc_cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+    proc_cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+  else
+    # macOS/BSD: no /proc; use lsof for cwd and ps for the command line.
+    proc_cwd="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n 1)"
+    proc_cmd="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+  fi
 
   [[ "$proc_cwd" == "$PROJECT_DIR" && "$proc_cmd" == *sentinel* ]]
 }
@@ -131,11 +138,13 @@ if [[ "$ADVERSARY" -eq 1 ]]; then
   cmd+=(--adversary)
 fi
 
-for path in "${PROTECTED_PATHS[@]}"; do
+# ${arr[@]+...} guard: plain "${arr[@]}" on an empty array is an unbound-variable
+# error under `set -u` in bash 3.2 (default shell on macOS).
+for path in ${PROTECTED_PATHS[@]+"${PROTECTED_PATHS[@]}"}; do
   cmd+=(--protected-path "$path")
 done
 
-date -Is > "$RUN_DIR/started_at.txt"
+date -Iseconds > "$RUN_DIR/started_at.txt"
 git status --short > "$RUN_DIR/status.before" 2>/dev/null || true
 
 {
@@ -153,7 +162,7 @@ python3 - "$RUN_DIR/launch.json" \
   "$START_OVER" \
   "$CLEAN" \
   "$ADVERSARY" \
-  "${PROTECTED_PATHS[@]}" <<'PY'
+  ${PROTECTED_PATHS[@]+"${PROTECTED_PATHS[@]}"} <<'PY'
 import json
 import sys
 
@@ -197,10 +206,18 @@ cat "$RUN_DIR/command.txt"
 
 # `&` alone is not enough in Codex/tool environments.
 # Use nohup + setsid so the process is not tied to the launching shell/session.
-nohup setsid "${cmd[@]}" \
-  > "$RUN_DIR/sentinel.log" \
-  2> "$RUN_DIR/sentinel.err.log" \
-  < /dev/null &
+# macOS has no setsid binary, so fall back to plain nohup there.
+if command -v setsid >/dev/null 2>&1; then
+  nohup setsid "${cmd[@]}" \
+    > "$RUN_DIR/sentinel.log" \
+    2> "$RUN_DIR/sentinel.err.log" \
+    < /dev/null &
+else
+  nohup "${cmd[@]}" \
+    > "$RUN_DIR/sentinel.log" \
+    2> "$RUN_DIR/sentinel.err.log" \
+    < /dev/null &
+fi
 
 PID="$!"
 echo "$PID" > "$PID_FILE"

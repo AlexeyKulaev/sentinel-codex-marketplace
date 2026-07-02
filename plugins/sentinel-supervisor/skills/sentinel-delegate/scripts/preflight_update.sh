@@ -9,7 +9,7 @@ echo "--- checking sentinel binary ---"
 if ! command -v sentinel >/dev/null 2>&1; then
   echo "status=missing"
   echo "sentinel binary not found in PATH"
-  echo "install: curl -fsSL https://sentinel.dev/install.sh | sh"
+  echo "install: pipx install git+https://github.com/Makson179/Sentinel.git"
   exit 127
 fi
 

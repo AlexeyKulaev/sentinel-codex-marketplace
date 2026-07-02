@@ -5,7 +5,7 @@ RUN_DIR=".codex/sentinel-run"
 mkdir -p "$RUN_DIR"
 
 echo "--- sentinel finalization ---"
-date -Is > "$RUN_DIR/finalized_at.txt"
+date -Iseconds > "$RUN_DIR/finalized_at.txt"
 
 echo
 echo "--- launch command ---"
