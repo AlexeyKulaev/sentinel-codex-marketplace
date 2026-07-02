@@ -4,7 +4,7 @@
 
 Install Sentinel:
 
-```bash
+```bash 
 pipx install git+https://github.com/Makson179/Sentinel.git
 sentinel doctor
 ```
