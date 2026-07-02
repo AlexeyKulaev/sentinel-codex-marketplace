@@ -144,7 +144,7 @@ for path in ${PROTECTED_PATHS[@]+"${PROTECTED_PATHS[@]}"}; do
   cmd+=(--protected-path "$path")
 done
 
-date -Iseconds > "$RUN_DIR/started_at.txt"
+date "+%Y-%m-%dT%H:%M:%S%z" > "$RUN_DIR/started_at.txt"
 git status --short > "$RUN_DIR/status.before" 2>/dev/null || true
 
 {
@@ -238,7 +238,8 @@ echo "started sentinel pid=$PID"
 
 echo "--- readiness check ---"
 
-for _ in $(seq 1 30); do
+attempt=1
+while [[ "$attempt" -le 30 ]]; do
   if ! kill -0 "$PID" 2>/dev/null; then
     echo "status=exited_during_startup"
     echo "--- command ---"
@@ -257,6 +258,7 @@ for _ in $(seq 1 30); do
   fi
 
   sleep 1
+  attempt=$((attempt + 1))
 done
 
 echo "status=running_but_no_state_observed_yet"

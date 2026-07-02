@@ -51,6 +51,8 @@ Then run Sentinel Supervisor in Codex:
 
 The plugin:
 
+* checks whether the Codex plugin marketplace is behind `main`;
+* automatically refreshes, removes, and reinstalls the plugin when a newer commit exists;
 * checks `sentinel doctor`;
 * checks `sentinel --version`;
 * runs `sentinel update` when an update is available;
@@ -78,10 +80,36 @@ sentinel update
 sentinel doctor
 ```
 
-Update the Codex marketplace and plugin:
+The plugin checks for its own updates at the start of each skill run. It
+compares the configured `sentinel-marketplace` snapshot commit with the latest
+commit on `refs/heads/main`. If the Git remote is unreachable, the plugin logs
+that the check was skipped and continues with the installed version. If the
+commit hashes differ, it runs:
 
 ```bash
 codex plugin marketplace upgrade sentinel-marketplace
 codex plugin remove sentinel-supervisor@sentinel-marketplace
 codex plugin add sentinel-supervisor@sentinel-marketplace
 ```
+
+After an automatic plugin update, start a new Codex thread or rerun the request
+so Codex loads the updated skill bundle.
+
+Manual fallback:
+
+```bash
+codex plugin marketplace upgrade sentinel-marketplace
+codex plugin remove sentinel-supervisor@sentinel-marketplace
+codex plugin add sentinel-supervisor@sentinel-marketplace
+```
+
+If you only need to retry the install step:
+
+```bash
+codex plugin remove sentinel-supervisor@sentinel-marketplace
+codex plugin add sentinel-supervisor@sentinel-marketplace
+```
+
+For every published plugin release, bump
+`plugins/sentinel-supervisor/.codex-plugin/plugin.json` `version`; Codex caches
+installed plugin bundles by plugin identity and version.

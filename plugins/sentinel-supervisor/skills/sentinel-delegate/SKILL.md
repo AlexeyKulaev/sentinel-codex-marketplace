@@ -8,9 +8,10 @@ Use this skill when the user wants Sentinel to perform a coding task through its
 Core contract:
 
 - Sentinel does the coding work.
-- Codex observes, monitors, explains, and summarizes.* Codex must not directly edit project code unless the user explicitly asks.
-* Sentinel must be installed separately and available as `sentinel` in PATH.
-* Adapter scripts must be resolved relative to this skill directory, not relative to the target project.
+- Codex observes, monitors, explains, and summarizes.
+- Codex must not directly edit project code unless the user explicitly asks.
+- Sentinel must be installed separately and available as `sentinel` in PATH.
+- Adapter scripts must be resolved relative to this skill directory, not relative to the target project.
 
 Path resolution rule:
 
@@ -19,19 +20,59 @@ Path resolution rule:
 * In normal user projects, that repo-relative path will not exist.
 * Instead, run scripts by absolute path under this installed skill directory:
 
+  * `$SKILL_DIR/scripts/plugin_self_update.sh`
   * `$SKILL_DIR/scripts/preflight_update.sh`
   * `$SKILL_DIR/scripts/start_sentinel.sh`
   * `$SKILL_DIR/scripts/check_sentinel.sh`
   * `$SKILL_DIR/scripts/finalize_sentinel.sh`
 
-Before running anything, read:
+Plugin self-update rule:
+
+* At the start of every skill invocation, before Sentinel preflight and before
+  starting work, run:
+
+  `$SKILL_DIR/scripts/plugin_self_update.sh`
+
+* The script compares the configured `sentinel-marketplace` Git snapshot commit
+  with the latest `refs/heads/main` commit from its Git remote.
+* If an update is available, the script runs `codex plugin marketplace upgrade`,
+  then `codex plugin remove`, then `codex plugin add`.
+* If the script prints `status=current`, continue normally.
+* If the script prints `status=updated`, stop this invocation after reporting
+  that the plugin was updated. Tell the user to start a new Codex thread or
+  rerun the request so Codex loads the updated skill bundle.
+* If the command cannot reach the Git remote, treat it as a network problem:
+  report that the update check was skipped and continue with the installed
+  plugin.
+* If Codex needs filesystem or network approval to read `~/.codex`, run
+  `git ls-remote`, refresh the marketplace, remove the plugin, or install the
+  plugin, request that approval and retry once.
+* If marketplace refresh, plugin removal, or plugin installation fails after an
+  update was detected, report the self-update failure and do not start Sentinel.
+
+Release rule for plugin updates:
+
+* Every published plugin update must bump `.codex-plugin/plugin.json` `version`.
+  The commit-hash check detects that the marketplace snapshot is behind, but
+  Codex caches installed plugin bundles by plugin identity and version.
+
+Before starting Sentinel, read:
 
 * `$SKILL_DIR/references/COMMAND_ORDER.md`
 * `$SKILL_DIR/references/SENTINEL_RUNTIME.md`
 
 Workflow:
 
-1. Parse the user request.
+1. Run plugin self-update.
+
+   Run:
+
+   `$SKILL_DIR/scripts/plugin_self_update.sh`
+
+   If the script installs an update, stop and ask the user to rerun the request
+   in a new thread. Do not start Sentinel from the stale skill bundle.
+
+2. Parse the user request.
 
    Extract supported Sentinel parameters only:
 
@@ -50,7 +91,7 @@ Workflow:
 
    Reject unknown Sentinel arguments instead of silently forwarding them.
 
-2. Run Sentinel preflight and update.
+3. Run Sentinel preflight and update.
 
    Run:
 
@@ -62,7 +103,7 @@ Workflow:
 
    If `sentinel doctor` fails, stop and report the failure. Do not start Sentinel.
 
-3. Start Sentinel in the background.
+4. Start Sentinel in the background.
 
    Run:
 
@@ -80,7 +121,7 @@ Workflow:
    * log path: `.codex/sentinel-run/`;
    * state path: `.supervisor/`.
 
-4. Monitor Sentinel.
+5. Monitor Sentinel.
 
    While Sentinel is running, periodically run:
 
@@ -119,7 +160,7 @@ Workflow:
    * blockers;
    * next expected step.
 
-5. Detect launch failures.
+6. Detect launch failures.
 
    If Sentinel exits but `.supervisor/` was never created, treat this as a launch failure, not a normal empty run.
 
@@ -131,7 +172,7 @@ Workflow:
    * stderr tail from `.codex/sentinel-run/sentinel.err.log`;
    * whether `.supervisor/` exists.
 
-6. Finalize after Sentinel exits.
+7. Finalize after Sentinel exits.
 
    Run:
 
@@ -144,7 +185,7 @@ Workflow:
    * `git diff --name-only`
    * `git status --short`
 
-7. Final response.
+8. Final response.
 
    Summarize:
 
