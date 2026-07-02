@@ -22,7 +22,7 @@ codex plugin add sentinel-supervisor@sentinel-marketplace
 ```
 
 Alternatively, open Codex:
-
+  
 ```bash
 codex
 /plugins
