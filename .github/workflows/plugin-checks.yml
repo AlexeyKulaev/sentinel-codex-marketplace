@@ -1,0 +1,101 @@
+name: Plugin Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  plugin-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON manifests
+        run: |
+          python3 -m json.tool .agents/plugins/marketplace.json >/dev/null
+          python3 -m json.tool plugins/sentinel-supervisor/.codex-plugin/plugin.json >/dev/null
+
+      - name: Check shell syntax
+        run: |
+          find plugins/sentinel-supervisor/skills/sentinel-delegate/scripts -name '*.sh' -print0 \
+            | xargs -0 -n1 bash -n
+
+      - name: Smoke-test launcher arguments
+        run: |
+          set -euo pipefail
+
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          mkdir -p "$tmp/fakebin" "$tmp/project"
+          cat > "$tmp/fakebin/sentinel" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          mkdir -p .supervisor
+          printf '%s\n' "$@" > .supervisor/argv.txt
+          sleep 5
+          EOF
+          chmod +x "$tmp/fakebin/sentinel"
+
+          cd "$tmp/project"
+          printf '# Task\n' > TASK.md
+
+          script="$GITHUB_WORKSPACE/plugins/sentinel-supervisor/skills/sentinel-delegate/scripts/start_sentinel.sh"
+          PATH="$tmp/fakebin:$PATH" "$script" \
+            --task TASK.md \
+            --coder-mod gpt-coder \
+            --super-mod gpt-super \
+            --coder-intelligence high \
+            --super-intelligence xhigh \
+            --fast=false \
+            --start-over=false \
+            --clean=false \
+            --completion-review=false \
+            --adversary=false \
+            --adversary-runs 0 \
+            --protected-path hidden
+
+          grep -qx -- '--coder-intelligence' .supervisor/argv.txt
+          grep -qx -- 'high' .supervisor/argv.txt
+          grep -qx -- '--super-intelligence' .supervisor/argv.txt
+          grep -qx -- 'xhigh' .supervisor/argv.txt
+          grep -qx -- '--fast' .supervisor/argv.txt
+          grep -qx -- '--completion-review' .supervisor/argv.txt
+          grep -qx -- '--adversary-runs' .supervisor/argv.txt
+          grep -qx -- 'hidden' .supervisor/argv.txt
+          ! grep -qx -- '--model' .supervisor/argv.txt
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path(".codex/sentinel-run/launch.json").read_text())
+          assert payload["fast"] is False
+          assert payload["start_over"] is False
+          assert payload["clean"] is False
+          assert payload["completion_review"] is False
+          assert payload["adversary"] is False
+          assert payload["adversary_runs"] == 0
+          PY
+
+      - name: Reject removed --model flag
+        run: |
+          set -euo pipefail
+
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          mkdir -p "$tmp/fakebin" "$tmp/project"
+          printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/fakebin/sentinel"
+          chmod +x "$tmp/fakebin/sentinel"
+
+          cd "$tmp/project"
+          printf '# Task\n' > TASK.md
+
+          script="$GITHUB_WORKSPACE/plugins/sentinel-supervisor/skills/sentinel-delegate/scripts/start_sentinel.sh"
+          if PATH="$tmp/fakebin:$PATH" "$script" --task TASK.md --model gpt-5.5 >out.txt 2>&1; then
+            echo "start_sentinel.sh unexpectedly accepted --model"
+            exit 1
+          fi
+          grep -q "Current Sentinel uses --coder-mod MODEL --super-mod MODEL instead." out.txt

@@ -35,8 +35,9 @@ Plugin self-update rule:
 
 * The script compares the configured `sentinel-marketplace` Git snapshot commit
   with the latest `refs/heads/main` commit from its Git remote.
-* If an update is available, the script runs `codex plugin marketplace upgrade`,
-  then `codex plugin remove`, then `codex plugin add`.
+* If an update is available, the script refreshes the marketplace, verifies the
+  plugin manifest, removes the installed plugin, then reinstalls it with
+  bounded retries and manual recovery commands on failure.
 * If the script prints `status=current`, continue normally.
 * If the script prints `status=updated`, stop this invocation after reporting
   that the plugin was updated. Tell the user to start a new Codex thread or
@@ -77,15 +78,22 @@ Workflow:
    Extract supported Sentinel parameters only:
 
    * task file, usually `TASK.md`;
-   * `--model MODEL`, if provided;
    * `--coder-mod MODEL`, if provided;
    * `--super-mod MODEL`, if provided;
-   * `--start-over`, if provided;
-   * `--clean`, only if explicitly provided;
-   * `--adversary`, if provided;
+   * `--coder-intelligence low|medium|high|xhigh`, if provided;
+   * `--super-intelligence low|medium|high|xhigh`, if provided;
+   * `--fast[=true|false]`, if provided;
+   * `--start-over[=true|false]`, if provided;
+   * `--clean[=true|false]`, only if explicitly provided;
+   * `--completion-review[=true|false]`, if provided;
+   * `--adversary[=true|false]`, if provided;
+   * `--adversary-runs N`, if provided;
    * repeated `--protected-path PATH`, if provided.
 
    Do not invent parameter values.
+
+   `--model` is not a current Sentinel flag. If the user asks for it, tell them
+   to use `--coder-mod MODEL --super-mod MODEL`.
 
    If the user provides `--coder-mod` without `--super-mod`, or `--super-mod` without `--coder-mod`, stop and ask for the missing paired parameter.
 

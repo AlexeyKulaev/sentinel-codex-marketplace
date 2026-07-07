@@ -21,12 +21,16 @@ When constructing Sentinel commands, preserve this order:
 4. Run options:
 
    `--task TASK.md`
-   `--model MODEL`
    `--coder-mod MODEL`
    `--super-mod MODEL`
-   `--start-over`
-   `--clean`
-   `--adversary`
+   `--coder-intelligence low|medium|high|xhigh`
+   `--super-intelligence low|medium|high|xhigh`
+   `--fast[=true|false]`
+   `--start-over[=true|false]`
+   `--clean[=true|false]`
+   `--completion-review[=true|false]`
+   `--adversary[=true|false]`
+   `--adversary-runs N`
    `--protected-path PATH`
 
 Rules:
@@ -36,5 +40,6 @@ Rules:
 - `--coder-mod` must be used together with `--super-mod`.
 - `--super-mod` must be used together with `--coder-mod`.
 - `--clean` must be used only when the user explicitly requests it.
+- `--model` is not a current Sentinel flag; use paired `--coder-mod` and `--super-mod`.
 - `--protected-path PATH` may be repeated.
 - Unknown arguments must be rejected instead of silently forwarded.

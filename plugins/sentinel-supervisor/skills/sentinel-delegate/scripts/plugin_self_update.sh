@@ -50,10 +50,40 @@ run_logged() {
   return "${PIPESTATUS[0]}"
 }
 
+run_logged_retry() {
+  local attempts="$1"
+  shift
+  local attempt=1
+  local rc=0
+
+  while [[ "$attempt" -le "$attempts" ]]; do
+    log "attempt=$attempt/$attempts command=$*"
+    if run_logged "$@"; then
+      return 0
+    fi
+    rc=$?
+    if [[ "$attempt" -lt "$attempts" ]]; then
+      sleep "$attempt"
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  return "$rc"
+}
+
 fail_check() {
   log "status=check_failed"
   log "reason=$1"
   exit "${2:-30}"
+}
+
+recovery_hint() {
+  log "recovery=manual"
+  log "run: codex plugin marketplace upgrade $MARKETPLACE_NAME"
+  log "run: codex plugin add $PLUGIN_SELECTOR"
+  log "if Codex reports the plugin is already installed but stale, run:"
+  log "run: codex plugin remove $PLUGIN_SELECTOR"
+  log "run: codex plugin add $PLUGIN_SELECTOR"
 }
 
 normalize_git_url() {
@@ -183,17 +213,29 @@ if [[ "$CHECK_ONLY" -eq 1 ]]; then
 fi
 
 log "--- refreshing marketplace snapshot ---"
-if ! run_logged codex plugin marketplace upgrade "$MARKETPLACE_NAME"; then
+if ! run_logged_retry 2 codex plugin marketplace upgrade "$MARKETPLACE_NAME"; then
   fail_check "marketplace_upgrade_failed" 40
 fi
 
+PLUGIN_ROOT="$MARKETPLACE_ROOT/plugins/$PLUGIN_NAME"
+PLUGIN_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
+
+if [[ ! -f "$PLUGIN_MANIFEST" ]]; then
+  fail_check "plugin_manifest_missing_after_marketplace_upgrade:$PLUGIN_MANIFEST" 43
+fi
+
+if ! python3 -m json.tool "$PLUGIN_MANIFEST" >/dev/null 2>>"$LOG_FILE"; then
+  fail_check "plugin_manifest_invalid_after_marketplace_upgrade:$PLUGIN_MANIFEST" 44
+fi
+
 log "--- removing installed plugin ---"
-if ! run_logged codex plugin remove "$PLUGIN_SELECTOR"; then
+if ! run_logged_retry 2 codex plugin remove "$PLUGIN_SELECTOR"; then
   fail_check "plugin_remove_failed" 41
 fi
 
 log "--- installing plugin ---"
-if ! run_logged codex plugin add "$PLUGIN_SELECTOR"; then
+if ! run_logged_retry 3 codex plugin add "$PLUGIN_SELECTOR"; then
+  recovery_hint
   fail_check "plugin_add_failed" 42
 fi
 

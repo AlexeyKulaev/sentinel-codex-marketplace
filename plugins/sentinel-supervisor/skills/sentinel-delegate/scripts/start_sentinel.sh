@@ -6,13 +6,37 @@ PROJECT_DIR="$(pwd -P)"
 mkdir -p "$RUN_DIR"
 
 TASK_FILE=""
-MODEL=""
 CODER_MOD=""
 SUPER_MOD=""
-START_OVER=0
-CLEAN=0
-ADVERSARY=0
+CODER_INTELLIGENCE=""
+SUPER_INTELLIGENCE=""
+FAST=""
+START_OVER=""
+CLEAN=""
+COMPLETION_REVIEW=""
+ADVERSARY=""
+ADVERSARY_RUNS=""
 PROTECTED_PATHS=()
+
+take_required_value() {
+  local flag="$1"
+  local value="${2:-}"
+  if [[ -z "$value" || "$value" == --* ]]; then
+    echo "missing value for $flag"
+    exit 2
+  fi
+  printf '%s\n' "$value"
+}
+
+take_optional_bool() {
+  local flag="$1"
+  local value="${2:-}"
+  if [[ -z "$value" || "$value" == --* ]]; then
+    printf 'true\n'
+    return 0
+  fi
+  printf '%s\n' "$value"
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -20,37 +44,106 @@ while [[ $# -gt 0 ]]; do
       TASK_FILE="${2:?missing value for --task}"
       shift 2
       ;;
-    --model)
-      MODEL="${2:?missing value for --model}"
-      shift 2
+    --task=*)
+      TASK_FILE="${1#*=}"
+      shift
+      ;;
+    --model|--model=*)
+      echo "unsupported argument: --model"
+      echo "Current Sentinel uses --coder-mod MODEL --super-mod MODEL instead."
+      exit 2
       ;;
     --coder-mod)
-      CODER_MOD="${2:?missing value for --coder-mod}"
+      CODER_MOD="$(take_required_value "$1" "${2:-}")"
       shift 2
+      ;;
+    --coder-mod=*)
+      CODER_MOD="${1#*=}"
+      shift
       ;;
     --super-mod)
-      SUPER_MOD="${2:?missing value for --super-mod}"
+      SUPER_MOD="$(take_required_value "$1" "${2:-}")"
       shift 2
       ;;
+    --super-mod=*)
+      SUPER_MOD="${1#*=}"
+      shift
+      ;;
+    --coder-intelligence)
+      CODER_INTELLIGENCE="$(take_required_value "$1" "${2:-}")"
+      shift 2
+      ;;
+    --coder-intelligence=*)
+      CODER_INTELLIGENCE="${1#*=}"
+      shift
+      ;;
+    --super-intelligence)
+      SUPER_INTELLIGENCE="$(take_required_value "$1" "${2:-}")"
+      shift 2
+      ;;
+    --super-intelligence=*)
+      SUPER_INTELLIGENCE="${1#*=}"
+      shift
+      ;;
+    --fast)
+      FAST="$(take_optional_bool "$1" "${2:-}")"
+      if [[ $# -gt 1 && "$2" != --* ]]; then shift 2; else shift; fi
+      ;;
+    --fast=*)
+      FAST="${1#*=}"
+      shift
+      ;;
     --start-over)
-      START_OVER=1
+      START_OVER="$(take_optional_bool "$1" "${2:-}")"
+      if [[ $# -gt 1 && "$2" != --* ]]; then shift 2; else shift; fi
+      ;;
+    --start-over=*)
+      START_OVER="${1#*=}"
       shift
       ;;
     --clean)
-      CLEAN=1
+      CLEAN="$(take_optional_bool "$1" "${2:-}")"
+      if [[ $# -gt 1 && "$2" != --* ]]; then shift 2; else shift; fi
+      ;;
+    --clean=*)
+      CLEAN="${1#*=}"
+      shift
+      ;;
+    --completion-review)
+      COMPLETION_REVIEW="$(take_optional_bool "$1" "${2:-}")"
+      if [[ $# -gt 1 && "$2" != --* ]]; then shift 2; else shift; fi
+      ;;
+    --completion-review=*)
+      COMPLETION_REVIEW="${1#*=}"
       shift
       ;;
     --adversary)
-      ADVERSARY=1
+      ADVERSARY="$(take_optional_bool "$1" "${2:-}")"
+      if [[ $# -gt 1 && "$2" != --* ]]; then shift 2; else shift; fi
+      ;;
+    --adversary=*)
+      ADVERSARY="${1#*=}"
+      shift
+      ;;
+    --adversary-runs)
+      ADVERSARY_RUNS="$(take_required_value "$1" "${2:-}")"
+      shift 2
+      ;;
+    --adversary-runs=*)
+      ADVERSARY_RUNS="${1#*=}"
       shift
       ;;
     --protected-path)
-      PROTECTED_PATHS+=("${2:?missing value for --protected-path}")
+      PROTECTED_PATHS+=("$(take_required_value "$1" "${2:-}")")
       shift 2
+      ;;
+    --protected-path=*)
+      PROTECTED_PATHS+=("${1#*=}")
+      shift
       ;;
     *)
       echo "unsupported argument: $1"
-      echo "Supported: --task --model --coder-mod --super-mod --start-over --clean --adversary --protected-path"
+      echo "Supported: --task --coder-mod --super-mod --coder-intelligence --super-intelligence --fast --start-over --clean --completion-review --adversary --adversary-runs --protected-path"
       exit 2
       ;;
   esac
@@ -117,25 +210,41 @@ cmd=(sentinel)
 # Order follows COMMAND_ORDER.md / tt.md.
 cmd+=(--task "$TASK_FILE")
 
-if [[ -n "$MODEL" ]]; then
-  cmd+=(--model "$MODEL")
-fi
-
 if [[ -n "$CODER_MOD" && -n "$SUPER_MOD" ]]; then
   cmd+=(--coder-mod "$CODER_MOD")
   cmd+=(--super-mod "$SUPER_MOD")
 fi
 
-if [[ "$START_OVER" -eq 1 ]]; then
-  cmd+=(--start-over)
+if [[ -n "$CODER_INTELLIGENCE" ]]; then
+  cmd+=(--coder-intelligence "$CODER_INTELLIGENCE")
 fi
 
-if [[ "$CLEAN" -eq 1 ]]; then
-  cmd+=(--clean)
+if [[ -n "$SUPER_INTELLIGENCE" ]]; then
+  cmd+=(--super-intelligence "$SUPER_INTELLIGENCE")
 fi
 
-if [[ "$ADVERSARY" -eq 1 ]]; then
-  cmd+=(--adversary)
+if [[ -n "$FAST" ]]; then
+  cmd+=(--fast "$FAST")
+fi
+
+if [[ -n "$START_OVER" ]]; then
+  cmd+=(--start-over "$START_OVER")
+fi
+
+if [[ -n "$CLEAN" ]]; then
+  cmd+=(--clean "$CLEAN")
+fi
+
+if [[ -n "$COMPLETION_REVIEW" ]]; then
+  cmd+=(--completion-review "$COMPLETION_REVIEW")
+fi
+
+if [[ -n "$ADVERSARY" ]]; then
+  cmd+=(--adversary "$ADVERSARY")
+fi
+
+if [[ -n "$ADVERSARY_RUNS" ]]; then
+  cmd+=(--adversary-runs "$ADVERSARY_RUNS")
 fi
 
 # ${arr[@]+...} guard: plain "${arr[@]}" on an empty array is an unbound-variable
@@ -156,12 +265,16 @@ git status --short > "$RUN_DIR/status.before" 2>/dev/null || true
 python3 - "$RUN_DIR/launch.json" \
   "$PROJECT_DIR" \
   "$TASK_FILE" \
-  "$MODEL" \
   "$CODER_MOD" \
   "$SUPER_MOD" \
+  "$CODER_INTELLIGENCE" \
+  "$SUPER_INTELLIGENCE" \
+  "$FAST" \
   "$START_OVER" \
   "$CLEAN" \
+  "$COMPLETION_REVIEW" \
   "$ADVERSARY" \
+  "$ADVERSARY_RUNS" \
   ${PROTECTED_PATHS[@]+"${PROTECTED_PATHS[@]}"} <<'PY'
 import json
 import sys
@@ -169,23 +282,42 @@ import sys
 out = sys.argv[1]
 project_dir = sys.argv[2]
 task_file = sys.argv[3]
-model = sys.argv[4]
-coder_mod = sys.argv[5]
-super_mod = sys.argv[6]
-start_over = sys.argv[7] == "1"
-clean = sys.argv[8] == "1"
-adversary = sys.argv[9] == "1"
-protected_paths = sys.argv[10:]
+coder_mod = sys.argv[4]
+super_mod = sys.argv[5]
+coder_intelligence = sys.argv[6]
+super_intelligence = sys.argv[7]
+fast = sys.argv[8]
+start_over = sys.argv[9]
+clean = sys.argv[10]
+completion_review = sys.argv[11]
+adversary = sys.argv[12]
+adversary_runs = sys.argv[13]
+protected_paths = sys.argv[14:]
+
+
+def optional_bool(value):
+    if not value:
+        return None
+    lowered = value.lower()
+    if lowered in {"1", "true", "yes", "on"}:
+        return True
+    if lowered in {"0", "false", "no", "off"}:
+        return False
+    return value
 
 data = {
     "project_dir": project_dir,
     "task_file": task_file,
-    "model": model or None,
     "coder_mod": coder_mod or None,
     "super_mod": super_mod or None,
-    "start_over": start_over,
-    "clean": clean,
-    "adversary": adversary,
+    "coder_intelligence": coder_intelligence or None,
+    "super_intelligence": super_intelligence or None,
+    "fast": optional_bool(fast),
+    "start_over": optional_bool(start_over),
+    "clean": optional_bool(clean),
+    "completion_review": optional_bool(completion_review),
+    "adversary": optional_bool(adversary),
+    "adversary_runs": int(adversary_runs) if adversary_runs else None,
     "protected_paths": protected_paths,
 }
 
