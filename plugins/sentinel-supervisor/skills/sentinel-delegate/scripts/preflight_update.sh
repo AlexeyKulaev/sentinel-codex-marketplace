@@ -9,7 +9,7 @@ echo "--- checking sentinel binary ---"
 if ! command -v sentinel >/dev/null 2>&1; then
   echo "status=missing"
   echo "sentinel binary not found in PATH"
-  echo "install: pipx install git+https://github.com/Makson179/Sentinel.git"
+  echo "install: pipx install sentinel-supervisor"
   exit 127
 fi
 
@@ -50,13 +50,31 @@ fi
 echo
 echo "--- update detection ---"
 
-# Temporary heuristic until Sentinel supports a machine-readable update check.
-# Recommended future command:
-#   sentinel doctor --json
-# or:
-#   sentinel update --check --json
-if grep -Eiq "update available|new version|out of date|outdated|behind" \
-  "$RUN_DIR/doctor.before.txt" "$RUN_DIR/version.before.txt"; then
+UPDATE_AVAILABLE=false
+if sentinel update --check --json > "$RUN_DIR/update.check.json" 2> "$RUN_DIR/update.check.err"; then
+  cat "$RUN_DIR/update.check.json"
+  UPDATE_AVAILABLE="$(python3 - "$RUN_DIR/update.check.json" <<'PY'
+import json
+import sys
+
+try:
+    payload = json.load(open(sys.argv[1], encoding="utf-8"))
+except Exception:
+    print("false")
+else:
+    print("true" if payload.get("update_available") is True else "false")
+PY
+)"
+else
+  echo "sentinel update --check --json failed; falling back to text detection"
+  cat "$RUN_DIR/update.check.err" || true
+  if grep -Eiq "update available|new version|out of date|outdated|behind" \
+    "$RUN_DIR/doctor.before.txt" "$RUN_DIR/version.before.txt"; then
+    UPDATE_AVAILABLE=true
+  fi
+fi
+
+if [[ "$UPDATE_AVAILABLE" == "true" ]]; then
 
   echo "update_available=true"
   echo "--- running sentinel update ---"

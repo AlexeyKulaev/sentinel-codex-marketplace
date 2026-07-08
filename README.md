@@ -5,7 +5,7 @@
 Install Sentinel:
 
 ```bash 
-pipx install git+https://github.com/Makson179/Sentinel.git
+pipx install sentinel-supervisor
 sentinel doctor
 ```
 
